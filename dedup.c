@@ -41,7 +41,7 @@ size_t dedup(uint64_t arr[], size_t size) {
     for (size_t i = 1; i < size; i++) {
         if (arr[i] != arr[i - 1]) {
             arr[j] = arr[i];
-            j++; 
+            j++;
         }
     }
 

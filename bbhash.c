@@ -1,21 +1,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#if defined(__has_include) && __has_include(<stdbit.h>)
-#include <stdbit.h>
-#elif defined(__GNUC__)
-static inline unsigned int stdc_count_ones(uint64_t x) {
-    return (unsigned int)__builtin_popcountll(x);
-}
-#else
-// Fast manual implementation 64-bit native
-static inline unsigned int stdc_count_ones(uint64_t x) {
-    x = x - ((x >> 1) & 0x5555555555555555ULL);
-    x = (x & 0x3333333333333333ULL) + ((x >> 2) & 0x3333333333333333ULL);
-    x = (x + (x >> 4)) & 0x0F0F0F0F0F0F0F0FULL;
-    return (unsigned int)((x * 0x0101010101010101ULL) >> 56);
-}
-#endif
+#include "bitarray.h"
+#include "bbhash.h"
+
+constexpr size_t MIN_BITARRAY_SIZE = 64;
 
 // MurmurHash3 128-bit for strings, return 64 bits
 uint64_t murmur3_string(const char *key, uint64_t seed) {
@@ -58,38 +47,51 @@ uint64_t murmur3_string(const char *key, uint64_t seed) {
 
     switch(len & 15) {
     case 15:
-        k2 ^= ((uint64_t)tail[14]) << 48; // fallthrough
+        k2 ^= ((uint64_t)tail[14]) << 48;
+        [[fallthrough]];
     case 14:
-        k2 ^= ((uint64_t)tail[13]) << 40; // fallthrough
+        k2 ^= ((uint64_t)tail[13]) << 40;
+        [[fallthrough]];
     case 13:
-        k2 ^= ((uint64_t)tail[12]) << 32; // fallthrough
+        k2 ^= ((uint64_t)tail[12]) << 32;
+        [[fallthrough]];
     case 12:
-        k2 ^= ((uint64_t)tail[11]) << 24; // fallthrough
+        k2 ^= ((uint64_t)tail[11]) << 24;
+        [[fallthrough]];
     case 11:
-        k2 ^= ((uint64_t)tail[10]) << 16; // fallthrough
+        k2 ^= ((uint64_t)tail[10]) << 16;
+        [[fallthrough]];
     case 10:
-        k2 ^= ((uint64_t)tail[ 9]) << 8;  // fallthrough
+        k2 ^= ((uint64_t)tail[ 9]) << 8;
+        [[fallthrough]];
     case  9:
         k2 ^= ((uint64_t)tail[ 8]) << 0;
         k2 *= c2;
         k2 = (k2 << 33) | (k2 >> 31);
         k2 *= c1;
         h2 ^= k2;
-    // fallthrough
+        [[fallthrough]];
     case  8:
-        k1 ^= ((uint64_t)tail[ 7]) << 56; // fallthrough
+        k1 ^= ((uint64_t)tail[ 7]) << 56;
+        [[fallthrough]];
     case  7:
-        k1 ^= ((uint64_t)tail[ 6]) << 48; // fallthrough
+        k1 ^= ((uint64_t)tail[ 6]) << 48;
+        [[fallthrough]];
     case  6:
-        k1 ^= ((uint64_t)tail[ 5]) << 40; // fallthrough
+        k1 ^= ((uint64_t)tail[ 5]) << 40;
+        [[fallthrough]];
     case  5:
-        k1 ^= ((uint64_t)tail[ 4]) << 32; // fallthrough
+        k1 ^= ((uint64_t)tail[ 4]) << 32;
+        [[fallthrough]];
     case  4:
-        k1 ^= ((uint64_t)tail[ 3]) << 24; // fallthrough
+        k1 ^= ((uint64_t)tail[ 3]) << 24;
+        [[fallthrough]];
     case  3:
-        k1 ^= ((uint64_t)tail[ 2]) << 16; // fallthrough
+        k1 ^= ((uint64_t)tail[ 2]) << 16;
+        [[fallthrough]];
     case  2:
-        k1 ^= ((uint64_t)tail[ 1]) << 8;  // fallthrough
+        k1 ^= ((uint64_t)tail[ 1]) << 8;
+        [[fallthrough]];
     case  1:
         k1 ^= ((uint64_t)tail[ 0]) << 0;
         k1 *= c1;
@@ -138,44 +140,134 @@ uint64_t hash_with_seed(uint64_t key, uint64_t seed) {
     return key;
 }
 
-size_t rank(uint64_t* bits) {
-    return stdc_count_ones(bits[0]);
+struct BBHashLevel {
+    Bitarray *collision_free_set;
+    size_t seed;
+    size_t level_offset;
+    BBHashLevel *next;
+};
+
+BBHashLevel *bbhash_level_new(size_t seed) {
+    BBHashLevel *level = malloc(sizeof(BBHashLevel));
+    if (!level) return NULL;
+    level->seed = seed;
+    level->level_offset = 0;
+    level->collision_free_set = NULL;
+    level->next = NULL;
+    return level;
 }
 
-
-uint64_t *bitarray_new(size_t n_bits) {
-    uint64_t *bits = calloc((n_bits + 63) / 64, sizeof(uint64_t));
-
-    //if (bits == NULL) {
-    //   fprintf(stderr, "Memory allocation failed!\n");
-    //}
-
-    return bits;
+void bbhash_level_free(BBHashLevel *level) {
+    if (level == NULL) {
+        return;
+    }
+    if (level->collision_free_set != NULL) {
+        bitarray_free(level->collision_free_set);
+    }
+    if (level->next) {
+        bbhash_level_free(level->next);
+    }
+    free(level);
 }
 
-// Set bit at position 'pos' to 1
-void bitarray_set(uint64_t *bits, size_t pos) {
-    size_t word = pos / 64;      // Which uint64_t? (or: pos >> 6)
-    size_t bit = pos % 64;       // Which bit within it? (or: pos & 63)
-    bits[word] |= (1ULL << bit); // Set that bit
+size_t calc_level_size(size_t unplaced) {
+    double gamma = 1.0;
+    size_t n = (size_t) unplaced * gamma;
+    return n < MIN_BITARRAY_SIZE ? MIN_BITARRAY_SIZE : n;
 }
 
-// Get bit at position 'pos'
-bool bitarray_get(const uint64_t *bits, size_t pos) {
-    size_t word = pos / 64;
-    size_t bit = pos % 64;
-    return (bits[word] >> bit) & 1;
+BBHashLevel *bbhash_mphf_create(uint64_t data[], size_t nelem) {
+    BBHashLevel *level0 = NULL;
+    BBHashLevel *current_level = NULL;
+    Bitarray* used_slots = bitarray_new(nelem);
+    Bitarray* has_been_placed = bitarray_new(nelem);
+    size_t placed = 0;  // number of keys perfectly mapped
+    size_t unplaced = nelem - placed;
+    uint64_t current_seed = 41;
+
+    while (unplaced > 0) {
+        // --- Setup for the current level ---
+        current_seed++;
+        BBHashLevel *new_level = bbhash_level_new(current_seed);
+        new_level->level_offset = placed;
+
+        if (level0 == NULL) {
+            level0 = new_level;
+        } else {
+            current_level->next = new_level;
+        }
+        current_level = new_level;
+
+        size_t level_size = calc_level_size(unplaced);
+        bitarray_shrink(used_slots, level_size);
+        bitarray_clear_all(used_slots);
+        Bitarray* colliding_slots = bitarray_new(level_size); // collisions
+
+        for (size_t i = 0; i < nelem; i++) {
+            if (bitarray_get(has_been_placed, i) == 1) continue;
+
+            uint64_t hash = hash_with_seed(data[i], current_level->seed);
+            size_t idx = hash % level_size;
+            if (bitarray_get(used_slots, idx) == 1) {
+                bitarray_set(colliding_slots, idx);
+            } else {
+                bitarray_set(used_slots, idx);
+            }
+        }
+
+        bitarray_andnot(colliding_slots, used_slots, colliding_slots);
+        current_level->collision_free_set = colliding_slots;
+
+        // update has_been_placed
+        size_t rank = 0;
+        for (size_t i = 0; i < nelem; i++) {
+            if (bitarray_get(has_been_placed, i) == 1) {
+                continue; // Already placed, skip.
+            }
+
+            uint64_t hash = hash_with_seed(data[i], current_seed);
+            size_t idx = hash % level_size;
+
+            if (bitarray_get(current_level->collision_free_set, idx) == 1) {
+                bitarray_set(has_been_placed, i);
+                rank++;
+            }
+        }
+
+        printf("Collision-free rank (%zu): %zu; offset %zu\n", current_level->seed, rank, current_level->level_offset);
+        placed += rank;
+        unplaced = nelem - placed;
+    }
+
+    bitarray_free(used_slots);
+    return level0;
 }
 
-// Clear bit at position 'pos' to 0
-void bitarray_clear(uint64_t *bits, size_t pos) {
-    size_t word = pos / 64;
-    size_t bit = pos % 64;
-    bits[word] &= ~(1ULL << bit);
-}
+/**
+ * @brief Queries the BBHash MPHF for the unique integer hash of a key.
+ *
+ * @param level0 The pointer to the first level of the BBHash structure.
+ * @param key    The key to query.
+ * @return The unique hash value (from 0 to nelem-1) if the key was in the
+ * original set. Otherwise, the behavior is undefined (it will
+ * likely return an incorrect value or a "random" index).
+ */
+size_t bbhash_mphf_query(BBHashLevel *level0, uint64_t key) {
+    BBHashLevel *current_level = level0;
 
-int main() {
-    uint64_t x = 5;
-    printf("%llu: %d\n", x, stdc_count_ones(x));
-    return EXIT_SUCCESS;
+    while (current_level != NULL) {
+        size_t level_size = current_level->collision_free_set->nbits;
+        uint64_t hash = hash_with_seed(key, current_level->seed);
+        size_t idx = hash % level_size;
+        if (bitarray_get(current_level->collision_free_set, idx) == 1) {
+            size_t rank = bitarray_rank(current_level->collision_free_set, idx);
+            return current_level->level_offset + rank;
+        }
+        current_level = current_level->next;
+    }
+
+    // Should not happen if the key was in the original set.
+    // This indicates the key was not part of the set used to build the MPHF.
+    // Returning (size_t)-1 (which is SIZE_MAX) is a common C idiom.
+    return (size_t) -1;
 }

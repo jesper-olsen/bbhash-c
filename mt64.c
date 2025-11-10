@@ -73,13 +73,13 @@
 #define MT64_NN 312
 
 // Structure to hold the state of the generator
-struct mt64 {
+struct Mt64 {
     uint64_t mt[MT64_NN];
     int mti;
 };
 
 /* @brief initialises the state with a seed */
-static void init_genrand64(mt64* state, uint64_t seed)
+static void init_genrand64(Mt64* state, uint64_t seed)
 {
     state->mt[0] = seed;
     for (state->mti = 1; state->mti < MT64_NN; state->mti++)
@@ -93,7 +93,7 @@ static void init_genrand64(mt64* state, uint64_t seed)
  * @param key_length  The number of elements in the array.
  * @return void
  */
-static void init_by_array64(mt64* state, uint64_t init_key[], uint64_t key_length)
+static void init_by_array64(Mt64* state, uint64_t init_key[], uint64_t key_length)
 {
     init_genrand64(state, 19650218ULL);
     uint64_t i = 1;
@@ -123,8 +123,8 @@ static void init_by_array64(mt64* state, uint64_t init_key[], uint64_t key_lengt
     state->mt[0] = 1ULL << 63; /* MSB is 1; assuring non-zero initial array */
 }
 
-mt64 *mt64_create(uint64_t seed) {
-    mt64* state = (mt64*)malloc(sizeof(mt64));
+Mt64 *mt64_create(uint64_t seed) {
+    Mt64* state = (Mt64*)malloc(sizeof(Mt64));
 
     if (state == NULL) {
         return NULL; // Return NULL to indicate failure
@@ -134,13 +134,13 @@ mt64 *mt64_create(uint64_t seed) {
     return state;
 }
 
-mt64 *mt64_create_default(void) {
+Mt64 *mt64_create_default(void) {
     // The reference implementation and the C++ standard library use seed 5489 by default
     return mt64_create(5489ULL);
 }
 
-mt64 *mt64_create_by_array(uint64_t init_key[], uint64_t key_length) {
-    mt64* state = (mt64*)malloc(sizeof(mt64));
+Mt64 *mt64_create_by_array(uint64_t init_key[], uint64_t key_length) {
+    Mt64* state = (Mt64*)malloc(sizeof(Mt64));
 
     if (state == NULL) {
         return NULL; // Return NULL to indicate failure
@@ -151,14 +151,14 @@ mt64 *mt64_create_by_array(uint64_t init_key[], uint64_t key_length) {
 }
 
 
-void mt64_destroy(mt64 *state) {
+void mt64_destroy(Mt64 *state) {
     if (state != NULL) {
         free(state);
     }
 }
 
 /* generates a random number on [0, 2^64-1]-interval */
-uint64_t mt64_gen_int64(mt64 *state)
+uint64_t mt64_gen_int64(Mt64 *state)
 {
     int i;
     uint64_t x;
@@ -191,25 +191,25 @@ uint64_t mt64_gen_int64(mt64 *state)
 }
 
 /* generates a random number on [0, 2^63-1]-interval */
-int64_t mt64_gen_int63(mt64* state)
+int64_t mt64_gen_int63(Mt64* state)
 {
     return (int64_t) mt64_gen_int64(state) >> 1;
 }
 
 /* generates a random number on [0,1]-real-interval */
-double mt64_gen_real1(mt64* state)
+double mt64_gen_real1(Mt64* state)
 {
     return (mt64_gen_int64(state) >> 11) * (1.0 / 9007199254740991.0);
 }
 
 /* generates a random number on [0,1)-real-interval */
-double mt64_gen_real2(mt64* state)
+double mt64_gen_real2(Mt64* state)
 {
     return (mt64_gen_int64(state) >> 11) * (1.0 / 9007199254740992.0);
 }
 
 /* generates a random number on (0,1)-real-interval */
-double mt64_gen_real3(mt64* state)
+double mt64_gen_real3(Mt64* state)
 {
     return ((mt64_gen_int64(state) >> 12) + 0.5) * (1.0 / 4503599627370496.0);
 }

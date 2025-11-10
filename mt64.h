@@ -12,25 +12,25 @@
 
 #include <stdint.h>
 
-typedef struct mt64 mt64;
+typedef struct Mt64 Mt64;
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // --- Constructor/Destructor API ---
-mt64 *mt64_create(uint64_t seed);
-mt64 *mt64_create_default(void);
-mt64 *mt64_create_by_array(uint64_t init_key[], uint64_t key_length);
-void mt64_destroy(mt64* state);
+Mt64 *mt64_create(uint64_t seed);
+Mt64 *mt64_create_default(void);
+Mt64 *mt64_create_by_array(uint64_t init_key[], uint64_t key_length);
+void mt64_destroy(Mt64* state);
 
 
 // --- Random Number Generation API ---
-uint64_t mt64_gen_int64(mt64* state);
-int64_t  mt64_gen_int63(mt64* state);
-double   mt64_gen_real1(mt64* state);
-double   mt64_gen_real2(mt64* state);
-double   mt64_gen_real3(mt64* state);
+uint64_t mt64_gen_int64(Mt64* state); // [0, 2^64-1]-interval */
+int64_t  mt64_gen_int63(Mt64* state); // [0, 2^63-1]-interval */
+double   mt64_gen_real1(Mt64* state); // [0,1]-real-interval */
+double   mt64_gen_real2(Mt64* state); // [0,1)-real-interval
+double   mt64_gen_real3(Mt64* state); // (0,1)-real-interval
 
 #ifdef __cplusplus
 }

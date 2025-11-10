@@ -1,13 +1,15 @@
 # Makefile for bbhash 
 
 CC      := clang
-CFLAGS  := -std=c23 -Wall -Wextra -Wno-switch-enum -Wno-deprecated-non-prototype -O2
+#-DNDEBUG: no debug - disable assert
+#CFLAGS  := -std=c23 -Wall -Wextra -Wno-switch-enum -Wno-deprecated-non-prototype -O2 -DNDEBUG
+CFLAGS  := -std=c23 -Wall -Wextra -Wno-switch-enum -Wno-deprecated-non-prototype -O2 
 
 ASTYLE  := astyle --suffix=none --align-pointer=name --pad-oper
 
-SRC     := bbhash.c mt64.c
-HEADER  := mt64.h
-TARGET  := bbhash
+SRC     := bbhash.c mt64.c bitarray.c dedup.c example.c
+HEADER  := mt64.h bitarray.h
+TARGET  := example 
 
 all: $(TARGET)
 
