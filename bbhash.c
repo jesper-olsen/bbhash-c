@@ -176,7 +176,7 @@ size_t calc_level_size(size_t unplaced) {
     return n < MIN_BITARRAY_SIZE ? MIN_BITARRAY_SIZE : n;
 }
 
-BBHashLevel *bbhash_mphf_create(uint64_t data[], size_t nelem) {
+BBHashLevel *bbhash_mphf_create(const uint64_t data[], size_t nelem) {
     BBHashLevel *level0 = NULL;
     BBHashLevel *current_level = NULL;
     Bitarray* used_slots = bitarray_new(nelem);
@@ -240,6 +240,7 @@ BBHashLevel *bbhash_mphf_create(uint64_t data[], size_t nelem) {
     }
 
     bitarray_free(used_slots);
+    bitarray_free(has_been_placed);
     return level0;
 }
 

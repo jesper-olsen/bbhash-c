@@ -84,6 +84,7 @@ bool bitarray_is_zero(const Bitarray *ba) {
     return (ba->bits[nwords - 1] & mask) == 0;
 }
 
+// rank - 0-based
 size_t bitarray_rank(const Bitarray *ba, size_t pos) {
     assert(ba != NULL && pos < ba->nbits);
 
@@ -95,18 +96,16 @@ size_t bitarray_rank(const Bitarray *ba, size_t pos) {
         rank += stdc_count_ones(ba->bits[i]);
     }
 
-    uint64_t last_word = ba->bits[word_idx];
-    if (bit_idx < 63) {
-        // mask for the lower (bit_idx + 1) bits.
-        uint64_t mask = (1ULL << (bit_idx + 1)) - 1;
+    // 2. Count bits in the final word (word_idx) up to bit_idx (exclusive)
+    if (bit_idx > 0) {
+        uint64_t last_word = ba->bits[word_idx];
+        // Create a mask for the lower 'bit_idx' bits (i.e., bits 0 to bit_idx-1)
+        uint64_t mask = (1ULL << bit_idx) - 1; 
         rank += stdc_count_ones(last_word & mask);
-    } else { // count all bits in the word.
-        rank += stdc_count_ones(last_word);
     }
 
     return rank;
 }
-
 
 void bitarray_andnot(Bitarray *dest, const Bitarray *src1, const Bitarray *src2) {
     assert(dest != NULL && src1 != NULL && src2 != NULL);

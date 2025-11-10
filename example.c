@@ -45,7 +45,17 @@ int main(int argc, char* argv[argc])
     BBHashLevel *mpf = bbhash_mphf_create(data, nelem);
 
     if (true) {
-        bool seen[nelem] = {};
+        printf("checking mpf\n"); fflush(stdout);
+        bool *seen = (bool *)calloc(nelem, sizeof(bool));
+        if (seen == NULL) {
+            // Handle allocation failure
+            printf("Failed to allocate 'seen' array\n");
+            bbhash_level_free(mpf); 
+            mt64_destroy(rng);
+            free(data);
+            return EXIT_FAILURE;
+        }
+
         for (size_t i = 0; i < nelem; i++) {
             size_t idx = bbhash_mphf_query(mpf, data[i]);
             //printf("%llu -> %zu\n", data[i], bbhash_mphf_query(mpf,data[i]));
@@ -55,6 +65,13 @@ int main(int argc, char* argv[argc])
                 seen[idx] = true;
             }
         }
+        for (size_t i = 0; i < nelem; i++) {
+            if (!seen[i]) {
+                printf("idx %zu not used\n", i);
+            }
+        }
+        printf("done\n"); fflush(stdout);
+        free(seen);
     }
 
     mt64_destroy(rng);
