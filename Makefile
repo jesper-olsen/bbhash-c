@@ -2,8 +2,8 @@
 
 CC      := clang
 #-DNDEBUG: no debug - disable assert
-#CFLAGS  := -std=c23 -Wall -Wextra -Wno-switch-enum -Wno-deprecated-non-prototype -O2 -DNDEBUG
-CFLAGS  := -std=c23 -Wall -Wextra -Wno-switch-enum -Wno-deprecated-non-prototype -O2 
+CFLAGS  := -std=c23 -Wall -Wextra -Wno-switch-enum -Wno-deprecated-non-prototype -O2 -DNDEBUG
+#CFLAGS  := -std=c23 -Wall -Wextra -Wno-switch-enum -Wno-deprecated-non-prototype -O2 
 
 ASTYLE  := astyle --suffix=none --align-pointer=name --pad-oper
 

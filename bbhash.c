@@ -177,13 +177,22 @@ size_t calc_level_size(size_t unplaced) {
 }
 
 BBHashLevel *bbhash_mphf_create(const uint64_t data[], size_t nelem) {
+    uint64_t *hashes=malloc(sizeof(uint64_t)*nelem);
+    uint64_t *data0=malloc(sizeof(uint64_t)*nelem);
+    if (hashes==NULL || data0==NULL) {
+        return NULL;
+    }
+    uint64_t *next_data=data0;
+    //memcpy(data, orgdata, sizeof(uint64_t)*nelem);
+
     BBHashLevel *level0 = NULL;
     BBHashLevel *current_level = NULL;
-    Bitarray* used_slots = bitarray_new(nelem);
-    Bitarray* has_been_placed = bitarray_new(nelem);
     size_t placed = 0;  // number of keys perfectly mapped
-    size_t unplaced = nelem - placed;
+    //size_t unplaced = nelem - placed;
+    size_t unplaced = nelem;
     uint64_t current_seed = 41;
+    size_t level_size = calc_level_size(unplaced);
+    Bitarray* used_slots = bitarray_new(level_size);
 
     while (unplaced > 0) {
         // --- Setup for the current level ---
@@ -204,9 +213,8 @@ BBHashLevel *bbhash_mphf_create(const uint64_t data[], size_t nelem) {
         Bitarray* colliding_slots = bitarray_new(level_size); // collisions
 
         for (size_t i = 0; i < nelem; i++) {
-            if (bitarray_get(has_been_placed, i) == 1) continue;
-
             uint64_t hash = hash_with_seed(data[i], current_level->seed);
+            hashes[i]=hash;
             size_t idx = hash % level_size;
             if (bitarray_get(used_slots, idx) == 1) {
                 bitarray_set(colliding_slots, idx);
@@ -218,29 +226,31 @@ BBHashLevel *bbhash_mphf_create(const uint64_t data[], size_t nelem) {
         bitarray_andnot(colliding_slots, used_slots, colliding_slots);
         current_level->collision_free_set = colliding_slots;
 
-        // update has_been_placed
         size_t rank = 0;
+        size_t j=0;
         for (size_t i = 0; i < nelem; i++) {
-            if (bitarray_get(has_been_placed, i) == 1) {
-                continue; // Already placed, skip.
-            }
-
-            uint64_t hash = hash_with_seed(data[i], current_seed);
-            size_t idx = hash % level_size;
+            //uint64_t hash = hash_with_seed(data[i], current_seed);
+            //size_t idx = hash % level_size;
+            size_t idx = hashes[i] % level_size;
 
             if (bitarray_get(current_level->collision_free_set, idx) == 1) {
-                bitarray_set(has_been_placed, i);
                 rank++;
+            } else {
+                next_data[j++]=data[i];
             }
         }
+        data=next_data;
+        nelem=j;
 
         printf("Collision-free rank (%zu): %zu; offset %zu\n", current_level->seed, rank, current_level->level_offset);
         placed += rank;
-        unplaced = nelem - placed;
+        //unplaced = nelem - placed;
+        unplaced = nelem;
     }
 
     bitarray_free(used_slots);
-    bitarray_free(has_been_placed);
+    free(data0);
+    free(hashes);
     return level0;
 }
 
