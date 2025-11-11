@@ -140,6 +140,7 @@ uint64_t hash_with_seed(uint64_t key, uint64_t seed) {
     return key;
 }
 
+typedef struct BBHashLevel BBHashLevel;
 struct BBHashLevel {
     Bitarray *collision_free_set;
     size_t seed;
@@ -170,28 +171,36 @@ void bbhash_level_free(BBHashLevel *level) {
     free(level);
 }
 
-size_t calc_level_size(size_t unplaced) {
-    double gamma = 1.0;
+typedef struct BBHash {
+    size_t num_keys;             // number of elements the MPHF was built for.
+    struct BBHashLevel *levels;  // linked list
+} BBHash;
+
+
+size_t calc_level_size(size_t unplaced, double gamma) {
     size_t n = (size_t) unplaced * gamma;
     return n < MIN_BITARRAY_SIZE ? MIN_BITARRAY_SIZE : n;
 }
 
-BBHashLevel *bbhash_mphf_create(const uint64_t data[], size_t nelem) {
-    uint64_t *hashes=malloc(sizeof(uint64_t)*nelem);
-    uint64_t *data0=malloc(sizeof(uint64_t)*nelem);
-    if (hashes==NULL || data0==NULL) {
-        return NULL;
-    }
-    uint64_t *next_data=data0;
-    //memcpy(data, orgdata, sizeof(uint64_t)*nelem);
+BBHash *bbhash_mphf_create(const uint64_t data[], size_t unplaced, double gamma) {
+    BBHash *mphf = malloc(sizeof(BBHash));
+    if (!mphf) return NULL;
+    mphf->levels=NULL;
+    mphf->num_keys=unplaced;
+
+    size_t *hash_indexes=malloc(sizeof(size_t)*unplaced);
+    if (hash_indexes==NULL) return NULL;
+
+    uint64_t *key_buffer=malloc(sizeof(uint64_t)*unplaced);
+    if (key_buffer==NULL) return NULL;
+
+    uint64_t *next_data=key_buffer;
 
     BBHashLevel *level0 = NULL;
     BBHashLevel *current_level = NULL;
     size_t placed = 0;  // number of keys perfectly mapped
-    //size_t unplaced = nelem - placed;
-    size_t unplaced = nelem;
     uint64_t current_seed = 41;
-    size_t level_size = calc_level_size(unplaced);
+    size_t level_size = calc_level_size(unplaced, gamma);
     Bitarray* used_slots = bitarray_new(level_size);
 
     while (unplaced > 0) {
@@ -199,7 +208,6 @@ BBHashLevel *bbhash_mphf_create(const uint64_t data[], size_t nelem) {
         current_seed++;
         BBHashLevel *new_level = bbhash_level_new(current_seed);
         new_level->level_offset = placed;
-
         if (level0 == NULL) {
             level0 = new_level;
         } else {
@@ -207,15 +215,15 @@ BBHashLevel *bbhash_mphf_create(const uint64_t data[], size_t nelem) {
         }
         current_level = new_level;
 
-        size_t level_size = calc_level_size(unplaced);
+        size_t level_size = calc_level_size(unplaced, gamma);
         bitarray_shrink(used_slots, level_size);
         bitarray_clear_all(used_slots);
         Bitarray* colliding_slots = bitarray_new(level_size); // collisions
 
-        for (size_t i = 0; i < nelem; i++) {
+        for (size_t i = 0; i < unplaced; i++) {
             uint64_t hash = hash_with_seed(data[i], current_level->seed);
-            hashes[i]=hash;
             size_t idx = hash % level_size;
+            hash_indexes[i]=idx;
             if (bitarray_get(used_slots, idx) == 1) {
                 bitarray_set(colliding_slots, idx);
             } else {
@@ -227,31 +235,46 @@ BBHashLevel *bbhash_mphf_create(const uint64_t data[], size_t nelem) {
         current_level->collision_free_set = colliding_slots;
 
         size_t rank = 0;
-        size_t j=0;
-        for (size_t i = 0; i < nelem; i++) {
-            //uint64_t hash = hash_with_seed(data[i], current_seed);
-            //size_t idx = hash % level_size;
-            size_t idx = hashes[i] % level_size;
-
+        size_t next_level_unplaced=0;
+        for (size_t i = 0; i < unplaced ; i++) {
+            size_t idx = hash_indexes[i];
             if (bitarray_get(current_level->collision_free_set, idx) == 1) {
                 rank++;
             } else {
-                next_data[j++]=data[i];
+                next_data[next_level_unplaced++]=data[i];
             }
         }
         data=next_data;
-        nelem=j;
+        unplaced=next_level_unplaced;
 
         printf("Collision-free rank (%zu): %zu; offset %zu\n", current_level->seed, rank, current_level->level_offset);
         placed += rank;
-        //unplaced = nelem - placed;
-        unplaced = nelem;
     }
 
     bitarray_free(used_slots);
-    free(data0);
-    free(hashes);
-    return level0;
+    free(key_buffer);
+    free(hash_indexes);
+
+    mphf->levels=level0;
+    return mphf;
+}
+
+size_t bbhash_size_in_bits(const BBHash *mphf) {
+    if (mphf == NULL) {
+        return 0;
+    }
+
+    size_t total_bits = 0;
+    struct BBHashLevel *current_level = mphf->levels;
+
+    while (current_level != NULL) {
+        if (current_level->collision_free_set) {
+            total_bits += current_level->collision_free_set->nbits;
+        }
+        current_level = current_level->next;
+    }
+    
+    return total_bits;
 }
 
 /**
@@ -263,8 +286,8 @@ BBHashLevel *bbhash_mphf_create(const uint64_t data[], size_t nelem) {
  * original set. Otherwise, the behavior is undefined (it will
  * likely return an incorrect value or a "random" index).
  */
-size_t bbhash_mphf_query(BBHashLevel *level0, uint64_t key) {
-    BBHashLevel *current_level = level0;
+size_t bbhash_mphf_query(BBHash *mphf, uint64_t key) {
+    BBHashLevel *current_level = mphf->levels;
 
     while (current_level != NULL) {
         size_t level_size = current_level->collision_free_set->nbits;
@@ -281,4 +304,12 @@ size_t bbhash_mphf_query(BBHashLevel *level0, uint64_t key) {
     // This indicates the key was not part of the set used to build the MPHF.
     // Returning (size_t)-1 (which is SIZE_MAX) is a common C idiom.
     return (size_t) -1;
+}
+
+void bbhash_free(BBHash *mphf) {
+    if (mphf == NULL) {
+        return;
+    }
+    bbhash_level_free(mphf->levels);
+    free(mphf);
 }

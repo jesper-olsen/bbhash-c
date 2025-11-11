@@ -92,11 +92,12 @@ size_t bitarray_rank(const Bitarray *ba, size_t pos) {
     size_t bit_idx = pos & 63;  // pos % 64
     size_t rank = 0;
 
+    // TODO - this can be done faster by pre-calculating a table with the sum...
     for (size_t i = 0; i < word_idx; i++) {
         rank += stdc_count_ones(ba->bits[i]);
     }
 
-    // 2. Count bits in the final word (word_idx) up to bit_idx (exclusive)
+    // Count bits in the final word (word_idx) up to bit_idx (exclusive)
     if (bit_idx > 0) {
         uint64_t last_word = ba->bits[word_idx];
         // Create a mask for the lower 'bit_idx' bits (i.e., bits 0 to bit_idx-1)
