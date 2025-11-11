@@ -101,7 +101,7 @@ size_t bitarray_rank(const Bitarray *ba, size_t pos) {
     if (bit_idx > 0) {
         uint64_t last_word = ba->bits[word_idx];
         // Create a mask for the lower 'bit_idx' bits (i.e., bits 0 to bit_idx-1)
-        uint64_t mask = (1ULL << bit_idx) - 1; 
+        uint64_t mask = (1ULL << bit_idx) - 1;
         rank += stdc_count_ones(last_word & mask);
     }
 
