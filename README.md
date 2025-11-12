@@ -27,7 +27,7 @@ This produces the `example` executable.
 ### Basic Usage
 
 ```sh
-./example <num_elements] [options]
+./example <num_elements> [options]
 ```
 
 ### Options
