@@ -87,7 +87,7 @@ Generated on a Macbook Air M1.
 
 ## References
 
-* Original paper: ["Fast and scalable minimal perfect hashing for massive key sets" (Limasset et al., 2017)](https://github.com/rizkg/BBHash#:~:text=http%3A//drops.dagstuhl.de/opus/volltexte/2017/7619/pdf/LIPIcs%2DSEA%2D2017%2D25.pdf)
+* Original paper: ["Fast and scalable minimal perfect hashing for massive key sets" (Limasset et al., 2017)](http://drops.dagstuhl.de/opus/volltexte/2017/7619/pdf/LIPIcs-SEA-2017-25.pdf)
 * Original C++ [implementation](https://github.com/rizkg/BBHash)
 
 
