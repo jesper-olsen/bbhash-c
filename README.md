@@ -1,24 +1,24 @@
 # BBHash - Minimal Perfect Hash Function in C23
 
- fast, space-efficient C23 implementation of the BBHash algorithm for constructing minimal perfect hash functions (MPHFs).
+Fast, space-efficient C23 implementation of the BBHash algorithm for constructing minimal perfect hash functions (MPHFs).
 
- ## What is BBHash?
- BBHash is an algorithm that creates a minimal perfect hash function - a hash function that maps a set of N keys
- to exactly N consecutive integers (0 to N-1) with no collisions and no gaps. This makes it ideal for creating
- compact, fast lookup structures.
+## What is BBHash?
+BBHash is an algorithm that creates a minimal perfect hash function - a hash function that maps a set of N keys
+to exactly N consecutive integers (0 to N-1) with no collisions and no gaps. This makes it ideal for creating
+compact, fast lookup structures.
 
- ## Key Features
+## Key Features
 
- * Minimal & Perfect: Maps N keys to [0,N-1] with no collisions.
- * Fast Construction: Builds MPHFs for millions of keys in seconds.
- * Space Efficient: Typically 2-4 bits per key.
- * Tunable: Trade off construction speed vs. space with gamma parameter.
+* Minimal & Perfect: Maps N keys to [0,N-1] with no collisions.
+* Fast Construction: Builds MPHFs for millions of keys in seconds.
+* Space Efficient: Typically 2-4 bits per key.
+* Tunable: Trade off construction speed vs. space with gamma parameter.
 
- ## Building
+## Building
 
- ```sh
- make
- ```
+```sh
+make
+```
 
 This produces the `example` executable.
 
