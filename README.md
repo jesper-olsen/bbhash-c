@@ -1,4 +1,4 @@
-# BBHash - Minimal Perfect Hash Function inC23
+# BBHash - Minimal Perfect Hash Function in C23
 
  fast, space-efficient C23 implementation of the BBHash algorithm for constructing minimal perfect hash functions (MPHFs).
 
