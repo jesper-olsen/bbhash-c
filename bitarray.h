@@ -4,6 +4,10 @@
 #include <stddef.h> // For size_t
 #include <stdint.h> // For uint64_t
 #include <stdbool.h> // For bool type
+#include <stdlib.h> 
+#include <stdio.h>   // fprintf
+#include <assert.h> 
+
 
 #if defined(__has_include) && __has_include(<stdbit.h>)
 #include <stdbit.h>
@@ -31,27 +35,47 @@ typedef struct {
  * @param nbits The number of bits the array should hold.
  * @return A pointer to the new Bitarray, or NULL on allocation failure.
  */
-Bitarray *bitarray_new(size_t nbits);
+static inline Bitarray *bitarray_new(size_t nbits) {
+    size_t nwords = (nbits + 63) / 64;
+    size_t total_size = sizeof(Bitarray) + nwords * sizeof(uint64_t); 
+    Bitarray *ba = calloc(1, total_size);
+    if (ba == NULL) {
+        fprintf(stderr, "Memory allocation failed for Bitarray!\n");
+        return NULL;
+    }
+    ba->nbits = nbits; 
+    return ba;
+}
 
 /**
  * Shrinks the array.
  * @param nbits The reduced number of bits the array should hold.
  */
-void bitarray_shrink(Bitarray *ba, size_t nbits);
-
+static inline void bitarray_shrink(Bitarray* ba, size_t nbits) {
+    assert(ba != NULL && nbits <= ba->nbits);
+    ba->nbits = nbits;
+}
 
 /**
  * Frees the memory allocated for the Bitarray.
  * @param ba A pointer to the Bitarray to be freed.
  */
-void bitarray_free(Bitarray *ba);
+static inline void bitarray_free(Bitarray *ba) {
+    free(ba);
+}
 
 /**
  * Sets a bit at a specific position to 1.
  * @param ba A pointer to the Bitarray.
  * @param pos The zero-based index of the bit to set.
  */
-void bitarray_set(Bitarray *ba, size_t pos);
+static inline void bitarray_set(Bitarray *ba, size_t pos) {
+    assert(ba != NULL && pos < ba->nbits);
+
+    size_t word = pos / 64;      // Which uint64_t? (or: pos >> 6)
+    size_t bit_in_word = pos % 64; // Which bit within it? (or: pos & 63)
+    ba->bits[word] |= (1ULL << bit_in_word);
+}
 
 /**
  * Gets the value of a bit at a specific position.
@@ -59,28 +83,66 @@ void bitarray_set(Bitarray *ba, size_t pos);
  * @param pos The zero-based index of the bit to get.
  * @return 1 if the bit is set, 0 if it is not. Returns 0 for out-of-bounds access.
  */
-int bitarray_get(const Bitarray *ba, size_t pos);
+static inline int bitarray_get(const Bitarray *ba, size_t pos) {
+    assert(ba != NULL && pos < ba->nbits);
+    size_t word = pos >> 6;
+    size_t bit_in_word = pos & 63;
+    // Check if the bit is set by masking and shifting.
+    return (ba->bits[word] >> bit_in_word) & 1;
+}
 
 /**
  * Clears a bit at a specific position to 0.
  * @param ba A pointer to the Bitarray.
  * @param pos The zero-based index of the bit to clear.
  */
-void bitarray_clear(Bitarray *ba, size_t pos);
+static inline void bitarray_clear(Bitarray *ba, size_t pos) {
+    assert(ba != NULL && pos < ba->nbits);
+    size_t word = pos >> 6;
+    size_t bit = pos & 63;
+    ba->bits[word] &= ~(1ULL << bit);
+}
 
 /**
  * Clears all bits in the bitarray.
  * @param ba A pointer to the Bitarray.
  */
-void bitarray_clear_all(Bitarray *ba);
+static inline void bitarray_clear_all(Bitarray *ba) {
+    size_t nwords = (ba->nbits + 63) / 64;
+    memset(ba->bits, 0, nwords * sizeof(uint64_t));
+}
 
 /**
  * Checks if no bits are set. Ignores unused bits in the final word.
  * @param ba A pointer to the Bitarray.
  * @return true if all bits are zero, false otherwise.
  */
-bool bitarray_is_zero(const Bitarray *ba);
+static inline bool bitarray_is_zero(const Bitarray *ba) {
+    assert(ba != NULL);
 
+    if (ba->nbits == 0) {
+        return true;
+    }
+
+    size_t nwords = (ba->nbits + 63) / 64;
+
+    // Check all the words that are fully used.
+    for (size_t i = 0; i < nwords - 1; i++) {
+        if (ba->bits[i] != 0) {
+            return false;
+        }
+    }
+
+    // check the last word, which might be partially used.
+    size_t bits_in_last_word = ba->nbits % 64;
+    if (bits_in_last_word == 0) {
+        return ba->bits[nwords - 1] == 0;
+    }
+
+    // mask for the used bits in the last word.
+    uint64_t mask = (1ULL << bits_in_last_word) - 1;
+    return (ba->bits[nwords - 1] & mask) == 0;
+}
 
 /**
  * @brief Calculates the rank of a bit position (number of set bits up to and including that position).
@@ -88,14 +150,51 @@ bool bitarray_is_zero(const Bitarray *ba);
  * @param pos The bit position (0-indexed).
  * @return The number of set bits in bits[0...pos].
  */
-size_t bitarray_rank(const Bitarray *ba, size_t pos);
+static inline size_t bitarray_rank(const Bitarray *ba, size_t pos) {
+    assert(ba != NULL && pos < ba->nbits);
 
+    size_t word_idx = pos >> 6; // pos / 64
+    size_t bit_idx = pos & 63;  // pos % 64
+    size_t rank = 0;
+
+    // TODO - this can be done faster by pre-calculating a table with the sum...
+    for (size_t i = 0; i < word_idx; i++) {
+        rank += stdc_count_ones(ba->bits[i]);
+    }
+
+    // Count bits in the final word (word_idx) up to bit_idx (exclusive)
+    if (bit_idx > 0) {
+        uint64_t last_word = ba->bits[word_idx];
+        // Create a mask for the lower 'bit_idx' bits (i.e., bits 0 to bit_idx-1)
+        uint64_t mask = (1ULL << bit_idx) - 1;
+        rank += stdc_count_ones(last_word & mask);
+    }
+
+    return rank;
+}
 
 /**
  * Performs a bitwise AND NOT operation. dest = src1 & ~src2.
  * Asserts that all three bit arrays are the same size.
  * It is safe for 'dest' to be the same as 'src1' or 'src2'.
  */
-void bitarray_andnot(Bitarray *dest, const Bitarray *src1, const Bitarray *src2);
+static inline void bitarray_andnot(Bitarray *dest, const Bitarray *src1, const Bitarray *src2) {
+    assert(dest != NULL && src1 != NULL && src2 != NULL);
+    assert(dest->nbits == src1->nbits && dest->nbits == src2->nbits);
+
+    size_t nwords = (dest->nbits + 63) / 64;
+
+    for (size_t i = 0; i < nwords; i++) {
+        dest->bits[i] = src1->bits[i] & (~src2->bits[i]);
+    }
+
+    // Zero the unused bits in the last destination word
+    size_t bits_in_last_word = dest->nbits % 64;
+    if (bits_in_last_word > 0) {
+        uint64_t mask = (1ULL << bits_in_last_word) - 1;
+        dest->bits[nwords - 1] &= mask;
+    }
+}
+
 
 #endif
