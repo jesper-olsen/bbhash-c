@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-// simple string-to-uint64_6 for strings
+// simple string-to-uint64 hash function
 uint64_t fnv1a_string(const char *key, uint64_t seed);
 
 // MurmurHash3 128-bit for strings, return 64 bits
@@ -12,8 +12,7 @@ uint64_t murmur3_string(const char *key, uint64_t seed);
 /**
  * @brief fmix64 function from MurmurHash3 by Austin Appleby.
  * 
- * Defined as static inline in the header for performance, allowing the compiler
- * to inline this critical function into hot loops.
+ * Defined as static inline in the header so that it can be inlined.
  */
 static inline uint64_t hash_with_seed(uint64_t key, uint64_t seed) {
     key ^= seed;

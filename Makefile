@@ -7,7 +7,7 @@ CFLAGS  := -std=c23 -Wall -Wextra -Wno-switch-enum -Wno-deprecated-non-prototype
 
 ASTYLE  := astyle --suffix=none --align-pointer=name --pad-oper
 
-SRC     := bbhash.c mt64.c bitarray.c dedup.c example.c
+SRC     := bbhash.c mt64.c bitarray.c dedup.c hashing.c example.c
 HEADER  := mt64.h bitarray.h
 TARGET  := example 
 
@@ -17,7 +17,7 @@ $(TARGET): $(SRC) $(HEADER)
 	$(CC) $(CFLAGS) -o $(TARGET) $(SRC)
 
 run: $(TARGET)
-	./$(TARGET)
+	./$(TARGET) 10000000
 
 fmt:
 	@echo "Formatting source files..."

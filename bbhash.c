@@ -49,17 +49,24 @@ size_t calc_level_size(size_t unplaced, double gamma) {
     return n < MIN_BITARRAY_SIZE ? MIN_BITARRAY_SIZE : n;
 }
 
-BBHash *bbhash_mphf_create(const uint64_t data[], size_t unplaced, double gamma) {
+BBHash *bbhash_mphf_create(const uint64_t data[], size_t unplaced, double gamma, bool verbose) {
     BBHash *mphf = malloc(sizeof(BBHash));
     if (!mphf) return NULL;
     mphf->levels = NULL;
     mphf->num_keys = unplaced;
 
     size_t *bucket_indexes = malloc(sizeof(size_t) * unplaced);
-    if (bucket_indexes == NULL) return NULL;
+    if (bucket_indexes == NULL) {
+        free(mphf);
+        return NULL;
+    }
 
     uint64_t *key_buffer = malloc(sizeof(uint64_t) * unplaced);
-    if (key_buffer == NULL) return NULL;
+    if (key_buffer == NULL) {
+        free(bucket_indexes);
+        free(mphf);
+        return NULL;
+    }
 
     uint64_t *next_data = key_buffer;
 
@@ -114,9 +121,13 @@ BBHash *bbhash_mphf_create(const uint64_t data[], size_t unplaced, double gamma)
         }
         data = next_data;
         unplaced = next_level_unplaced;
-
-        printf("Level %llu; placed %zu; offset %zu\n", current_level->seed-INITIAL_SEED-1, rank, current_level->level_offset);
         placed += rank;
+
+        if (verbose)
+            printf("Level %llu; placed %zu; offset %zu\n", 
+                    current_level->seed - INITIAL_SEED - 1, 
+                    rank, 
+                    current_level->level_offset);
     }
 
     bitarray_free(used_slots);

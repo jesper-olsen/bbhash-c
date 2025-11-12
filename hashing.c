@@ -1,3 +1,6 @@
+#include <string.h>
+#include <stdlib.h>
+
 uint64_t fnv1a_string(const char *key, uint64_t seed) {
     uint64_t hash = 0xcbf29ce484222325ULL ^ seed; // FNV offset basis
     const uint64_t prime = 0x100000001b3ULL;       // FNV prime

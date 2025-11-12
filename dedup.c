@@ -1,11 +1,10 @@
 /**
- * A C23 program to de-duplicate an array of uint64_t.
+ * A C23 function to de-duplicate an array of uint64_t.
  *
- * This program uses the standard C library's qsort() function combined with
+ * Uses the standard C library's qsort() function combined with
  * a single-pass "unique" scan to de-duplicate the array in-place.
  */
 
-#include <stdio.h>    // For printf
 #include <stdint.h>   // For uint64_t
 #include <stdlib.h>   // For qsort
 #include <stddef.h>   // For size_t
@@ -23,7 +22,7 @@ int compare_u64(const void *a, const void *b) {
 
 /**
  * @brief De-duplicates a given array of uint64_t in-place.
- * * This function first sorts the array, then moves all unique elements
+ * This function first sorts the array, then moves all unique elements
  * to the beginning of the array.
  *
  * @param arr The array of uint64_t to de-duplicate.

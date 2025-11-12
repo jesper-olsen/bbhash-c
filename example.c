@@ -15,9 +15,10 @@ void print_usage(const char* prog_name);
 int main(int argc, char* argv[]) {
     // --- Default Parameters ---
     size_t nelem = 10000000;
-    double gamma = 2.0; // Default to a speed-optimized gamma
+    double gamma = 2.0; // 1.0 => smaller mphf, 2.0 larger, but faster construction.
     bool validate = false;
     bool nelem_set = false;
+    bool verbose = true;
 
     // --- Argument Parsing ---
     if (argc < 2) {
@@ -88,7 +89,7 @@ int main(int argc, char* argv[]) {
     // --- MPHF Construction & Timing ---
     printf("\nConstructing MPHF...\n");
     clock_t start = clock();
-    BBHash *mphf = bbhash_mphf_create(data, nelem, gamma);
+    BBHash *mphf = bbhash_mphf_create(data, nelem, gamma, verbose);
     clock_t end = clock();
     double cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
 
