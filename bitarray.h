@@ -4,9 +4,9 @@
 #include <stddef.h> // For size_t
 #include <stdint.h> // For uint64_t
 #include <stdbool.h> // For bool type
-#include <stdlib.h> 
+#include <stdlib.h>
 #include <stdio.h>   // fprintf
-#include <assert.h> 
+#include <assert.h>
 
 
 #if defined(__has_include) && __has_include(<stdbit.h>)
@@ -37,13 +37,13 @@ typedef struct {
  */
 static inline Bitarray *bitarray_new(size_t nbits) {
     size_t nwords = (nbits + 63) / 64;
-    size_t total_size = sizeof(Bitarray) + nwords * sizeof(uint64_t); 
+    size_t total_size = sizeof(Bitarray) + nwords * sizeof(uint64_t);
     Bitarray *ba = calloc(1, total_size);
     if (ba == NULL) {
         fprintf(stderr, "Memory allocation failed for Bitarray!\n");
         return NULL;
     }
-    ba->nbits = nbits; 
+    ba->nbits = nbits;
     return ba;
 }
 
@@ -145,28 +145,34 @@ static inline bool bitarray_is_zero(const Bitarray *ba) {
 }
 
 /**
- * @brief Calculates the rank of a bit position (number of set bits up to and including that position).
- * @param bits The constant bit array.
+ * @brief Calculates the rank of a bit position (number of set bits BEFORE this position).
+ * This is an "exclusive" rank.
+ * @param ba The constant bit array.
+ * @param popcounts Precomputed cumulative popcounts array.
  * @param pos The bit position (0-indexed).
- * @return The number of set bits in bits[0...pos].
+ * @return The number of set bits in bits[0...pos-1].
  */
-static inline size_t bitarray_rank(const Bitarray *ba, size_t pos) {
+static inline size_t bitarray_rank(const Bitarray *ba, const size_t *popcounts, size_t pos) {
     assert(ba != NULL && pos < ba->nbits);
 
-    size_t word_idx = pos >> 6; // pos / 64
-    size_t bit_idx = pos & 63;  // pos % 64
-    size_t rank = 0;
+    const size_t block_size_in_bits = 512;
+    const size_t word_idx = pos >> 6;      // pos / 64
+    const size_t bit_idx = pos & 63;       // pos % 64
 
-    // TODO - this can be done faster by pre-calculating a table with the sum...
-    for (size_t i = 0; i < word_idx; i++) {
+    // pre-computed rank from the checkpoint table
+    const size_t checkpoint_idx = pos / block_size_in_bits; // or word_idx / 8
+    size_t rank = popcounts[checkpoint_idx];
+
+    // Scan the words between the checkpoint and the current word
+    const size_t start_word_in_block = checkpoint_idx * (block_size_in_bits / 64);
+    for (size_t i = start_word_in_block; i < word_idx; ++i) {
         rank += stdc_count_ones(ba->bits[i]);
     }
 
-    // Count bits in the final word (word_idx) up to bit_idx (exclusive)
+    // Count bits in the final word (exclusive of pos)
     if (bit_idx > 0) {
         uint64_t last_word = ba->bits[word_idx];
-        // Create a mask for the lower 'bit_idx' bits (i.e., bits 0 to bit_idx-1)
-        uint64_t mask = (1ULL << bit_idx) - 1;
+        uint64_t mask = (1ULL << bit_idx) - 1; // Mask for bits [0...bit_idx-1]
         rank += stdc_count_ones(last_word & mask);
     }
 

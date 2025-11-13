@@ -93,6 +93,10 @@ int main(int argc, char* argv[]) {
     clock_t end = clock();
     double cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
 
+    //bbhash_mphf_save(mphf, "mphf.bin");
+    //bbhash_free(mphf);
+    //mphf = bbhash_mphf_load("mphf.bin");
+
     if (!mphf) {
         fprintf(stderr, "Error: Failed to create MPHF.\n");
         free(data);
