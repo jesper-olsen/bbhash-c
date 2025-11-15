@@ -6,6 +6,7 @@
 #include "bbhash.h"
 
 constexpr size_t MIN_BITARRAY_SIZE = 64;
+const uint64_t INITIAL_SEED = 41;
 
 typedef struct BBHashLevel BBHashLevel;
 struct BBHashLevel {
@@ -69,7 +70,11 @@ bool bbhash_build_rank_checkpoints(BBHashLevel *level) {
     }
 
     if (level->next) {
-        return bbhash_build_rank_checkpoints(level->next);
+        if (!bbhash_build_rank_checkpoints(level->next)) {
+            free(level->popcounts);
+            level->popcounts = NULL;
+            return false;
+        }
     }
     return true;
 }
@@ -114,7 +119,6 @@ BBHash *bbhash_mphf_create(const uint64_t data[], size_t unplaced, double gamma,
 
     BBHashLevel *current_level = NULL;
     size_t placed = 0;  // number of keys perfectly mapped
-    constexpr uint64_t INITIAL_SEED = 41;
     uint64_t current_seed = INITIAL_SEED;
     size_t level_size = calc_level_size(unplaced, gamma);
     used_slots = bitarray_new(level_size);
@@ -122,6 +126,7 @@ BBHash *bbhash_mphf_create(const uint64_t data[], size_t unplaced, double gamma,
     while (unplaced > 0) {
         // --- Setup for the current level ---
         BBHashLevel *new_level = bbhash_level_new();
+        if (!new_level) goto failure;
         new_level->level_offset = placed;
         new_level->seed = ++current_seed;
         if (level0 == NULL) {
