@@ -152,7 +152,7 @@ static inline bool bitarray_is_zero(const Bitarray *ba) {
  * @param pos The bit position (0-indexed).
  * @return The number of set bits in bits[0...pos-1].
  */
-static inline size_t bitarray_rank(const Bitarray *ba, const size_t *popcounts, size_t pos) {
+static inline size_t bitarray_rank(const Bitarray *ba, const uint64_t *popcounts, size_t pos) {
     assert(ba != NULL && pos < ba->nbits);
 
     const size_t block_size_in_bits = 512;

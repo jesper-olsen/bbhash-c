@@ -10,16 +10,16 @@ constexpr size_t MIN_BITARRAY_SIZE = 64;
 typedef struct BBHashLevel BBHashLevel;
 struct BBHashLevel {
     Bitarray *collision_free_set;
-    size_t *popcounts;
+    uint64_t *popcounts;
     size_t seed;
     size_t level_offset;
     BBHashLevel *next;
 };
 
-BBHashLevel *bbhash_level_new(size_t seed) {
+BBHashLevel *bbhash_level_new() {
     BBHashLevel *level = malloc(sizeof(BBHashLevel));
     if (!level) return NULL;
-    level->seed = seed;
+    level->seed = 0;
     level->level_offset = 0;
     level->collision_free_set = NULL;
     level->popcounts = NULL;
@@ -46,19 +46,19 @@ void bbhash_level_free(BBHashLevel *level) {
 constexpr size_t BLOCK_SIZE_IN_WORDS = 8;
 constexpr size_t BLOCK_SIZE_IN_BITS = BLOCK_SIZE_IN_WORDS * 64; // 512 bits = 8*64
 
-void bbhash_build_rank_checkpoints(BBHashLevel *level) {
-    if (level == NULL || level->collision_free_set == NULL) return;
+bool bbhash_build_rank_checkpoints(BBHashLevel *level) {
+    if (level == NULL || level->collision_free_set == NULL) return false;
 
     Bitarray* ba = level->collision_free_set;
     size_t num_words = (ba->nbits + 63) / 64;
     size_t num_checkpoints = (num_words + BLOCK_SIZE_IN_WORDS - 1) / BLOCK_SIZE_IN_WORDS;
 
-    level->popcounts = malloc(sizeof(size_t) * num_checkpoints);
+    level->popcounts = malloc(sizeof(uint64_t) * num_checkpoints);
     if (!level->popcounts) {
-        /* handle error */ return;
+        return false; // error
     }
 
-    size_t total_popcount = 0;
+    uint64_t total_popcount = 0;
     size_t checkpoint_idx = 0;
 
     for (size_t i = 0; i < num_words; ++i) {
@@ -69,8 +69,9 @@ void bbhash_build_rank_checkpoints(BBHashLevel *level) {
     }
 
     if (level->next) {
-        bbhash_build_rank_checkpoints(level->next);
+        return bbhash_build_rank_checkpoints(level->next);
     }
+    return true;
 }
 
 typedef struct BBHash {
@@ -80,7 +81,13 @@ typedef struct BBHash {
 
 
 size_t calc_level_size(size_t unplaced, double gamma) {
-    size_t n = (size_t) unplaced * gamma;
+    assert(gamma>0);
+    if (unplaced > SIZE_MAX / gamma) {
+        fprintf(stderr, "Overflow - gamma is too big");
+        return SIZE_MAX;  
+    }
+    
+    size_t n = (size_t)(unplaced * gamma);
     return n < MIN_BITARRAY_SIZE ? MIN_BITARRAY_SIZE : n;
 }
 
@@ -89,35 +96,34 @@ BBHash *bbhash_mphf_create(const uint64_t data[], size_t unplaced, double gamma,
     if (!mphf) return NULL;
     mphf->levels = NULL;
     mphf->num_keys = unplaced;
+    uint64_t *key_buffer = NULL;
+    BBHashLevel *level0 = NULL;
+    Bitarray *used_slots = NULL;
 
     size_t *bucket_indexes = malloc(sizeof(size_t) * unplaced);
     if (bucket_indexes == NULL) {
-        free(mphf);
-        return NULL;
+        goto failure;
     }
 
-    uint64_t *key_buffer = malloc(sizeof(uint64_t) * unplaced);
+    key_buffer = malloc(sizeof(uint64_t) * unplaced);
     if (key_buffer == NULL) {
-        free(bucket_indexes);
-        free(mphf);
-        return NULL;
+        goto failure;
     }
 
     uint64_t *next_data = key_buffer;
 
-    BBHashLevel *level0 = NULL;
     BBHashLevel *current_level = NULL;
     size_t placed = 0;  // number of keys perfectly mapped
     constexpr uint64_t INITIAL_SEED = 41;
     uint64_t current_seed = INITIAL_SEED;
     size_t level_size = calc_level_size(unplaced, gamma);
-    Bitarray* used_slots = bitarray_new(level_size);
+    used_slots = bitarray_new(level_size);
 
     while (unplaced > 0) {
         // --- Setup for the current level ---
-        current_seed++;
-        BBHashLevel *new_level = bbhash_level_new(current_seed);
+        BBHashLevel *new_level = bbhash_level_new();
         new_level->level_offset = placed;
+        new_level->seed = ++current_seed;
         if (level0 == NULL) {
             level0 = new_level;
         } else {
@@ -169,12 +175,29 @@ BBHash *bbhash_mphf_create(const uint64_t data[], size_t unplaced, double gamma,
     free(bucket_indexes);
     mphf->levels = level0;
 
-    bbhash_build_rank_checkpoints(level0);
+    if (bbhash_build_rank_checkpoints(level0))
+        return mphf;
 
-    return mphf;
+failure:
+    if (bucket_indexes) free(bucket_indexes);
+    if (mphf) free(mphf);
+    if (key_buffer) free(key_buffer);
+    if (used_slots) bitarray_free(used_slots);
+    if (level0) bbhash_level_free(level0);
+    return NULL;
 }
 
-/*  @brief
+/**
+ * @brief Calculate the total memory footprint of the MPHF in bits.
+ *
+ * This function computes the actual memory usage of the BBHash data structure,
+ * including both the bit arrays used for collision detection and the auxiliary
+ * rank checkpoint tables used for fast queries.
+ *
+ * The calculation includes:
+ * - Bit arrays for each level (rounded up to 64-bit word boundaries)
+ * - Popcount/rank checkpoint tables for each level
+ * - Does NOT include the overhead of struct pointers and metadata
  *
  */
 size_t bbhash_size_in_bits(const BBHash *mphf) {
@@ -195,7 +218,7 @@ size_t bbhash_size_in_bits(const BBHash *mphf) {
             // Size of the popcounts checkpoint table.
             // One checkpoint (a size_t) for every `block_size_in_bits`.
             size_t num_checkpoints = (nbits + BLOCK_SIZE_IN_BITS - 1) / BLOCK_SIZE_IN_BITS;
-            size_t popcounts_storage_bits = num_checkpoints * sizeof(size_t) * 8;
+            size_t popcounts_storage_bits = num_checkpoints * sizeof(current_level->popcounts[0]) * 8;
             total_bits += bitarray_storage_bits + popcounts_storage_bits;
         }
         current_level = current_level->next;
@@ -213,7 +236,7 @@ size_t bbhash_size_in_bits(const BBHash *mphf) {
  * original set. Otherwise, the behavior is undefined (it will
  * likely return an incorrect value or a "random" index).
  */
-size_t bbhash_mphf_query(BBHash *mphf, uint64_t key) {
+size_t bbhash_mphf_query(const BBHash *mphf, uint64_t key) {
     BBHashLevel *current_level = mphf->levels;
 
     while (current_level != NULL) {
@@ -285,7 +308,7 @@ int bbhash_mphf_save(const BBHash *mphf, const char *filename) {
         size_t num_checkpoints = (ba->nbits + BLOCK_SIZE_IN_BITS - 1) / BLOCK_SIZE_IN_BITS;
         uint64_t num_checkpoints_u64 = num_checkpoints;
         if (fwrite(&num_checkpoints_u64, sizeof(uint64_t), 1, fp) != 1) goto write_error;
-        if (fwrite(level->popcounts, sizeof(size_t), num_checkpoints, fp) != num_checkpoints) goto write_error;
+        if (fwrite(level->popcounts, sizeof(uint64_t), num_checkpoints, fp) != num_checkpoints) goto write_error;
     }
 
     fclose(fp);
@@ -307,7 +330,7 @@ BBHash *bbhash_mphf_load(const char *filename) {
         return NULL;
     }
 
-    // --- 1. Read and Validate Header ---
+    // Read and Validate Header ---
     char magic[4];
     if (fread(magic, sizeof(char), 4, fp) != 4) goto read_error;
     if (magic[0] != 'B' || magic[1] != 'B' || magic[2] != 'H' || magic[3] != '1') {
@@ -320,7 +343,7 @@ BBHash *bbhash_mphf_load(const char *filename) {
     if (fread(&num_keys_u64, sizeof(uint64_t), 1, fp) != 1) goto read_error;
     if (fread(&num_levels_u64, sizeof(uint64_t), 1, fp) != 1) goto read_error;
 
-    // --- 2. Allocate and Reconstruct MPHF ---
+    // Allocate and Reconstruct MPHF ---
     BBHash *mphf = malloc(sizeof(BBHash));
     if (!mphf) goto alloc_error;
     mphf->num_keys = num_keys_u64;
@@ -328,7 +351,7 @@ BBHash *bbhash_mphf_load(const char *filename) {
 
     BBHashLevel *current_level_tail = NULL;
     for (size_t i = 0; i < num_levels_u64; ++i) {
-        BBHashLevel *level = bbhash_level_new(0); // Seed will be overwritten
+        BBHashLevel *level = bbhash_level_new();
         if (!level) {
             bbhash_free(mphf); // Clean up partially loaded structure
             goto alloc_error;
@@ -362,7 +385,7 @@ BBHash *bbhash_mphf_load(const char *filename) {
         if (fread(&num_checkpoints_u64, sizeof(uint64_t), 1, fp) != 1) goto read_error_cleanup;
         level->popcounts = malloc(sizeof(size_t) * num_checkpoints_u64);
         if (!level->popcounts) goto read_error_cleanup;
-        if (fread(level->popcounts, sizeof(size_t), num_checkpoints_u64, fp) != num_checkpoints_u64) goto read_error_cleanup;
+        if (fread(level->popcounts, sizeof(uint64_t), num_checkpoints_u64, fp) != num_checkpoints_u64) goto read_error_cleanup;
     }
 
     fclose(fp);
@@ -375,6 +398,7 @@ alloc_error:
 
 read_error_cleanup:
     bbhash_free(mphf); // Free everything allocated so far
+
 read_error:
     fprintf(stderr, "Error reading from MPHF file (file may be corrupt or truncated).\n");
     fclose(fp);

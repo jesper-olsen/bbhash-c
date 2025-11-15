@@ -1,6 +1,6 @@
 
 
-const char* vocab[] = {
+const char *vocab[] = {
     "?", "\"spel", "above", "abra", "abrac", "acros", "ascen", "attac", "awkwa", "axe", "back",
     "barre", "bars", "batte", "beans", "bear", "bed", "bedqu", "bird", "blast", "blowu", "bottl",
     "box", "break", "brief", "broke", "build", "cage", "calm", "canyo", "captu", "carpe", "carry",
